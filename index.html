@@ -1,0 +1,1223 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>ClipPulse — Clipping Agency Operations Hub</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              400: '#818cf8',
+              500: '#6366f1',
+              600: '#4f46e5',
+            },
+            darkbg: '#090d16',
+            surface: '#111726',
+            card: '#161f33',
+            border: '#23304d'
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Supabase JS Client CDN (Optional Cloud Sync) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    /* Mobile-first polish & smooth scrolling */
+    body {
+      background-color: #090d16;
+      color: #f1f5f9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .glass {
+      background: rgba(22, 31, 51, 0.75);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .safe-bottom {
+      padding-bottom: env(safe-area-inset-bottom, 20px);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col pb-24 md:pb-8">
+
+  <!-- TOP APP BAR -->
+  <header class="sticky top-0 z-40 glass border-b border-white/10 px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-2.5">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+        <i data-lucide="scissors" class="w-5 h-5 text-white"></i>
+      </div>
+      <div>
+        <h1 class="text-base font-bold tracking-tight text-white flex items-center gap-1.5">
+          ClipPulse
+          <span id="syncModeBadge" class="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            Local Demo
+          </span>
+        </h1>
+        <p class="text-[11px] text-slate-400" id="syncStatusText">Ready • Autosaving enabled</p>
+      </div>
+    </div>
+
+    <!-- Quick Action Header Buttons -->
+    <div class="flex items-center gap-2">
+      <button onclick="refreshData()" title="Sync & Refresh Views" class="p-2 rounded-lg bg-surface border border-white/10 text-slate-300 hover:text-white active:scale-95 transition">
+        <i data-lucide="refresh-cw" class="w-4 h-4" id="refreshIcon"></i>
+      </button>
+      <button onclick="openModal('settingsModal')" title="Cloud Settings" class="p-2 rounded-lg bg-surface border border-white/10 text-slate-300 hover:text-white active:scale-95 transition">
+        <i data-lucide="settings" class="w-4 h-4"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="flex-1 max-w-5xl w-full mx-auto p-4 md:p-6 space-y-6">
+
+    <!-- TAB 1: DASHBOARD -->
+    <section id="tab-dashboard" class="space-y-6 active-tab">
+      
+      <!-- TOP METRICS CARDS -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        
+        <!-- Total Approved Views -->
+        <div class="glass p-4 rounded-2xl relative overflow-hidden">
+          <div class="flex items-center justify-between text-slate-400 mb-1">
+            <span class="text-xs font-medium">Approved Views</span>
+            <i data-lucide="eye" class="w-4 h-4 text-emerald-400"></i>
+          </div>
+          <div class="text-2xl font-black text-white tracking-tight" id="dashTotalViews">0</div>
+          <p class="text-[11px] text-emerald-400/90 mt-1 flex items-center gap-1">
+            <i data-lucide="check-circle-2" class="w-3 h-3"></i> Validated clips only
+          </p>
+        </div>
+
+        <!-- Total Payout Owed -->
+        <div class="glass p-4 rounded-2xl relative overflow-hidden">
+          <div class="flex items-center justify-between text-slate-400 mb-1">
+            <span class="text-xs font-medium">Total Payout</span>
+            <i data-lucide="dollar-sign" class="w-4 h-4 text-indigo-400"></i>
+          </div>
+          <div class="text-2xl font-black text-white tracking-tight" id="dashTotalPayout">$0.00</div>
+          <p class="text-[11px] text-slate-400 mt-1">Live CPM calculations</p>
+        </div>
+
+        <!-- Pending Approvals -->
+        <div class="glass p-4 rounded-2xl relative overflow-hidden">
+          <div class="flex items-center justify-between text-slate-400 mb-1">
+            <span class="text-xs font-medium">Pending Review</span>
+            <i data-lucide="clock" class="w-4 h-4 text-amber-400"></i>
+          </div>
+          <div class="text-2xl font-black text-amber-400 tracking-tight" id="dashPendingVideos">0</div>
+          <p class="text-[11px] text-slate-400 mt-1" id="dashPendingViews">0 pending views</p>
+        </div>
+
+        <!-- Active Clippers & Campaigns -->
+        <div class="glass p-4 rounded-2xl relative overflow-hidden">
+          <div class="flex items-center justify-between text-slate-400 mb-1">
+            <span class="text-xs font-medium">Team & Campaigns</span>
+            <i data-lucide="users" class="w-4 h-4 text-violet-400"></i>
+          </div>
+          <div class="text-2xl font-black text-white tracking-tight" id="dashClipperCount">0</div>
+          <p class="text-[11px] text-slate-400 mt-1" id="dashCampaignCount">Across 0 campaigns</p>
+        </div>
+
+      </div>
+
+      <!-- CAMPAIGN BUDGET OVERVIEW -->
+      <div class="glass p-5 rounded-2xl space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+            <i data-lucide="target" class="w-4 h-4 text-indigo-400"></i> Active Campaigns
+          </h2>
+          <button onclick="switchTab('campaigns')" class="text-xs text-indigo-400 hover:text-indigo-300 font-semibold">
+            Manage &rarr;
+          </button>
+        </div>
+        <div id="dashCampaignsList" class="space-y-3 pt-1">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+      <!-- CLIPPER LEADERBOARD & PAYOUT BREAKDOWN -->
+      <div class="glass p-5 rounded-2xl space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+            <i data-lucide="award" class="w-4 h-4 text-amber-400"></i> Clipper Payout Ledger
+          </h2>
+          <button onclick="switchTab('clippers')" class="text-xs text-indigo-400 hover:text-indigo-300 font-semibold">
+            All Clippers &rarr;
+          </button>
+        </div>
+        <div id="dashClipperLedger" class="divide-y divide-white/5">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+    </section>
+
+    <!-- TAB 2: VIDEOS & APPROVALS -->
+    <section id="tab-videos" class="space-y-4 hidden">
+      
+      <!-- Video Filter Controls -->
+      <div class="glass p-4 rounded-2xl space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 class="text-base font-bold text-white flex items-center gap-2">
+              <i data-lucide="film" class="w-4 h-4 text-indigo-400"></i> Auto-Extracted Videos
+            </h2>
+            <p class="text-xs text-slate-400">Only approved videos count toward views and clipper payouts.</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="bulkApproveAll()" class="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition active:scale-95">
+              <i data-lucide="check-check" class="w-3.5 h-3.5"></i> Approve All
+            </button>
+            <button onclick="openModal('addVideoModal')" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition active:scale-95 shadow-lg shadow-indigo-600/30">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i> Add Video
+            </button>
+          </div>
+        </div>
+
+        <!-- Filter Badges -->
+        <div class="flex items-center gap-2 overflow-x-auto pb-1 hide-scrollbar text-xs">
+          <button onclick="setVideoFilter('all')" id="filter-btn-all" class="filter-badge active px-3 py-1 rounded-lg bg-indigo-600 text-white font-medium">All (<span id="count-all">0</span>)</button>
+          <button onclick="setVideoFilter('pending')" id="filter-btn-pending" class="filter-badge px-3 py-1 rounded-lg bg-surface border border-white/10 text-slate-300 font-medium">Pending (<span id="count-pending">0</span>)</button>
+          <button onclick="setVideoFilter('approved')" id="filter-btn-approved" class="filter-badge px-3 py-1 rounded-lg bg-surface border border-white/10 text-slate-300 font-medium">Approved (<span id="count-approved">0</span>)</button>
+          <button onclick="setVideoFilter('pre_campaign')" id="filter-btn-pre_campaign" class="filter-badge px-3 py-1 rounded-lg bg-surface border border-white/10 text-slate-300 font-medium">⚠️ Pre-Campaign (<span id="count-pre">0</span>)</button>
+        </div>
+      </div>
+
+      <!-- VIDEO FEED LIST -->
+      <div id="videoCardsList" class="space-y-3">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- TAB 3: CAMPAIGNS -->
+    <section id="tab-campaigns" class="space-y-4 hidden">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-bold text-white">Campaigns & CPM Rates</h2>
+          <p class="text-xs text-slate-400">Define CPM ($ per 1K views) and campaign guidelines.</p>
+        </div>
+        <button onclick="openModal('campaignModal')" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition active:scale-95 shadow-lg shadow-indigo-600/30">
+          <i data-lucide="plus" class="w-4 h-4"></i> New Campaign
+        </button>
+      </div>
+
+      <div id="campaignsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- TAB 4: CLIPPERS & HANDLES -->
+    <section id="tab-clippers" class="space-y-4 hidden">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-bold text-white">Clippers & Social Handles</h2>
+          <p class="text-xs text-slate-400">Add clippers and link their TikTok, YouTube, or Instagram handles.</p>
+        </div>
+        <button onclick="openModal('clipperModal')" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition active:scale-95 shadow-lg shadow-indigo-600/30">
+          <i data-lucide="user-plus" class="w-4 h-4"></i> Add Clipper
+        </button>
+      </div>
+
+      <div id="clippersContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- TAB 5: BACKUP & SETTINGS -->
+    <section id="tab-settings" class="space-y-4 hidden">
+      <div class="glass p-5 rounded-2xl space-y-4">
+        <h2 class="text-base font-bold text-white flex items-center gap-2">
+          <i data-lucide="cloud" class="w-5 h-5 text-indigo-400"></i> Supabase Cloud Sync
+        </h2>
+        <p class="text-xs text-slate-300 leading-relaxed">
+          Connect your free Supabase database so your phone and the 30-minute GitHub Actions background scraper stay synced in real-time.
+        </p>
+
+        <div class="space-y-3 pt-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Supabase Project URL</label>
+            <input type="text" id="settingSupabaseUrl" placeholder="https://xyzcompany.supabase.co" class="w-full bg-surface border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Supabase Anon Key</label>
+            <input type="password" id="settingSupabaseKey" placeholder="eyJhbGciOi..." class="w-full bg-surface border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+          </div>
+          <button onclick="saveSupabaseSettings()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition active:scale-98 shadow-md">
+            Save & Connect Cloud
+          </button>
+        </div>
+      </div>
+
+      <!-- Backup & Restore -->
+      <div class="glass p-5 rounded-2xl space-y-3">
+        <h2 class="text-base font-bold text-white flex items-center gap-2">
+          <i data-lucide="hard-drive" class="w-5 h-5 text-emerald-400"></i> Backup & Data Portability
+        </h2>
+        <p class="text-xs text-slate-400">Export all your campaigns, clippers, and videos as a single JSON file or restore from a previous backup.</p>
+        
+        <div class="grid grid-cols-2 gap-3 pt-2">
+          <button onclick="exportDataJson()" class="py-2.5 bg-surface border border-white/10 hover:border-white/20 text-slate-200 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition active:scale-95">
+            <i data-lucide="download" class="w-4 h-4 text-emerald-400"></i> Export JSON
+          </button>
+          <label class="py-2.5 bg-surface border border-white/10 hover:border-white/20 text-slate-200 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer text-center">
+            <i data-lucide="upload" class="w-4 h-4 text-indigo-400"></i> Import JSON
+            <input type="file" id="importFileInput" accept=".json" class="hidden" onchange="importDataJson(event)">
+          </label>
+        </div>
+        <button onclick="resetToDemoData()" class="w-full py-2 text-rose-400/80 hover:text-rose-300 text-xs font-medium text-center transition">
+          Reset to Sample Demo Data
+        </button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MOBILE BOTTOM NAVIGATION DOCK -->
+  <nav class="fixed bottom-0 inset-x-0 z-40 glass border-t border-white/10 safe-bottom">
+    <div class="max-w-md mx-auto grid grid-cols-5 px-2 py-2">
+      <button onclick="switchTab('dashboard')" class="nav-btn active flex flex-col items-center gap-1 py-1 text-slate-400" id="nav-dashboard">
+        <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+        <span class="text-[10px] font-medium">Overview</span>
+      </button>
+      <button onclick="switchTab('videos')" class="nav-btn flex flex-col items-center gap-1 py-1 text-slate-400 relative" id="nav-videos">
+        <i data-lucide="film" class="w-5 h-5"></i>
+        <span class="text-[10px] font-medium">Videos</span>
+        <span id="navPendingBadge" class="hidden absolute top-0.5 right-4 w-2 h-2 rounded-full bg-amber-400"></span>
+      </button>
+      <button onclick="switchTab('campaigns')" class="nav-btn flex flex-col items-center gap-1 py-1 text-slate-400" id="nav-campaigns">
+        <i data-lucide="target" class="w-5 h-5"></i>
+        <span class="text-[10px] font-medium">Campaigns</span>
+      </button>
+      <button onclick="switchTab('clippers')" class="nav-btn flex flex-col items-center gap-1 py-1 text-slate-400" id="nav-clippers">
+        <i data-lucide="users" class="w-5 h-5"></i>
+        <span class="text-[10px] font-medium">Clippers</span>
+      </button>
+      <button onclick="switchTab('settings')" class="nav-btn flex flex-col items-center gap-1 py-1 text-slate-400" id="nav-settings">
+        <i data-lucide="sliders" class="w-5 h-5"></i>
+        <span class="text-[10px] font-medium">Cloud/Sync</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- ==================== MODALS ==================== -->
+
+  <!-- MODAL: ADD / EDIT CAMPAIGN -->
+  <div id="campaignModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="glass w-full max-w-md rounded-2xl p-6 space-y-4 border border-white/15">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <i data-lucide="target" class="w-5 h-5 text-indigo-400"></i> New Campaign
+        </h3>
+        <button onclick="closeModal('campaignModal')" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <form onsubmit="handleSaveCampaign(event)" class="space-y-3.5">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Campaign Name *</label>
+          <input type="text" id="campName" required placeholder="e.g. Energy Drink Viral Launch" class="w-full bg-surface border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">CPM ($ / 1k views) *</label>
+            <input type="number" step="0.10" id="campCpm" required value="1.50" class="w-full bg-surface border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Platform</label>
+            <select id="campPlatform" class="w-full bg-surface border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+              <option value="all">All Platforms</option>
+              <option value="tiktok">TikTok</option>
+              <option value="youtube">YouTube Shorts</option>
+              <option value="instagram">Instagram Reels</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Budget Cap ($)</label>
+            <input type="number" id="campBudget" placeholder="Optional (e.g. 1000)" class="w-full bg-surface border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Start Date *</label>
+            <input type="date" id="campStartDate" required class="w-full bg-surface border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Required Hashtag / Tag Filter (Optional)</label>
+          <input type="text" id="campTagFilter" placeholder="e.g. #drinksurge (filters out personal clips)" class="w-full bg-surface border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+        </div>
+        <div class="flex gap-2 pt-2">
+          <button type="button" onclick="closeModal('campaignModal')" class="w-1/2 py-2.5 bg-surface text-slate-300 rounded-xl text-xs font-semibold">Cancel</button>
+          <button type="submit" class="w-1/2 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-indigo-600/30">Create Campaign</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD CLIPPER -->
+  <div id="clipperModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="glass w-full max-w-md rounded-2xl p-6 space-y-4 border border-white/15">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <i data-lucide="user-plus" class="w-5 h-5 text-indigo-400"></i> Add Clipper
+        </h3>
+        <button onclick="closeModal('clipperModal')" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <form onsubmit="handleSaveClipper(event)" class="space-y-3.5">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Clipper Name / Alias *</label>
+          <input type="text" id="clipName" required placeholder="e.g. Alex Cuts" class="w-full bg-surface border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Contact (Telegram / Discord / WhatsApp)</label>
+          <input type="text" id="clipContact" placeholder="@alexcuts_tg" class="w-full bg-surface border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Assigned Campaign *</label>
+          <select id="clipCampaign" required class="w-full bg-surface border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+            <!-- Dynamically populated -->
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Social Handles (Comma-separated)</label>
+          <textarea id="clipHandles" rows="2" placeholder="@alextok, @alex_shorts (YouTube), @alex.reels" class="w-full bg-surface border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"></textarea>
+          <p class="text-[11px] text-slate-400 mt-1">Add @handles. The 30m background sync will auto-pull from these!</p>
+        </div>
+        <div class="flex gap-2 pt-2">
+          <button type="button" onclick="closeModal('clipperModal')" class="w-1/2 py-2.5 bg-surface text-slate-300 rounded-xl text-xs font-semibold">Cancel</button>
+          <button type="submit" class="w-1/2 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-indigo-600/30">Save Clipper</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD VIDEO (RAPID / MANUAL OVERRIDE) -->
+  <div id="addVideoModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="glass w-full max-w-md rounded-2xl p-6 space-y-4 border border-white/15">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <i data-lucide="plus-circle" class="w-5 h-5 text-indigo-400"></i> Add Video Link
+        </h3>
+        <button onclick="closeModal('addVideoModal')" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <form onsubmit="handleSaveManualVideo(event)" class="space-y-3.5">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Video URL *</label>
+          <input type="url" id="manualVidUrl" required placeholder="https://www.tiktok.com/@handle/video/..." class="w-full bg-surface border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Clipper *</label>
+            <select id="manualVidClipper" required class="w-full bg-surface border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+              <!-- Dynamically populated -->
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Current Views *</label>
+            <input type="number" id="manualVidViews" required value="1000" class="w-full bg-surface border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Initial Status</label>
+          <select id="manualVidStatus" class="w-full bg-surface border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+            <option value="pending">Pending Review</option>
+            <option value="approved">Approved</option>
+          </select>
+        </div>
+        <div class="flex gap-2 pt-2">
+          <button type="button" onclick="closeModal('addVideoModal')" class="w-1/2 py-2.5 bg-surface text-slate-300 rounded-xl text-xs font-semibold">Cancel</button>
+          <button type="submit" class="w-1/2 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-indigo-600/30">Save Video</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- APPLICATION CORE JAVASCRIPT LOGIC -->
+  <script>
+    // =========================================================================
+    // STATE ENGINE & LOCAL STORAGE
+    // =========================================================================
+    const STORAGE_KEY = "clippulse_data_v1";
+    const SETTINGS_KEY = "clippulse_settings_v1";
+
+    // Default Sample Data (Instantly loaded so user can test without setup)
+    const DEFAULT_DATA = {
+      campaigns: [
+        {
+          id: "camp-1",
+          name: "Apex Energy Drink Viral Clips",
+          cpm: 1.50,
+          platform: "all",
+          budgetCap: 1500,
+          tagFilter: "#drinkapex",
+          startDate: new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0],
+          status: "active"
+        },
+        {
+          id: "camp-2",
+          name: "SaaS App Launch (Shorts)",
+          cpm: 2.00,
+          platform: "youtube",
+          budgetCap: 800,
+          tagFilter: "",
+          startDate: new Date(Date.now() - 3 * 86400000).toISOString().split('T')[0],
+          status: "active"
+        }
+      ],
+      clippers: [
+        {
+          id: "clip-1",
+          name: "Marcus V.",
+          contact: "@marcus_clips (TG)",
+          handles: ["@marcusdaily", "@marcus_shorts"],
+          assignedCampaignIds: ["camp-1"]
+        },
+        {
+          id: "clip-2",
+          name: "Sarah Clips",
+          contact: "@sarahcutz (Discord)",
+          handles: ["@sarahviral"],
+          assignedCampaignIds: ["camp-1", "camp-2"]
+        }
+      ],
+      videos: [
+        {
+          id: "vid-1",
+          campaignId: "camp-1",
+          clipperId: "clip-1",
+          platform: "tiktok",
+          handle: "@marcusdaily",
+          videoUrl: "https://www.tiktok.com/@marcusdaily/video/7391823901",
+          title: "The secret hack nobody told you about energy drinks #drinkapex",
+          thumbnailUrl: "",
+          views: 142500,
+          status: "approved",
+          isPreCampaign: false,
+          postedAt: new Date(Date.now() - 2 * 86400000).toISOString()
+        },
+        {
+          id: "vid-2",
+          campaignId: "camp-1",
+          clipperId: "clip-1",
+          platform: "tiktok",
+          handle: "@marcusdaily",
+          videoUrl: "https://www.tiktok.com/@marcusdaily/video/7391823902",
+          title: "POV: You drink this before morning gym workout #drinkapex",
+          views: 38400,
+          status: "pending",
+          isPreCampaign: false,
+          postedAt: new Date(Date.now() - 1 * 86400000).toISOString()
+        },
+        {
+          id: "vid-3",
+          campaignId: "camp-1",
+          clipperId: "clip-2",
+          platform: "tiktok",
+          handle: "@sarahviral",
+          videoUrl: "https://www.tiktok.com/@sarahviral/video/7389102831",
+          title: "Old vlog from last year (Pre-campaign test)",
+          views: 92000,
+          status: "unsubmitted",
+          isPreCampaign: true,
+          postedAt: new Date(Date.now() - 30 * 86400000).toISOString()
+        },
+        {
+          id: "vid-4",
+          campaignId: "camp-2",
+          clipperId: "clip-2",
+          platform: "youtube",
+          handle: "@sarahviral",
+          videoUrl: "https://youtube.com/shorts/xyz982",
+          title: "How to automate your entire workflow in 3 clicks",
+          views: 65000,
+          status: "approved",
+          isPreCampaign: false,
+          postedAt: new Date(Date.now() - 2 * 86400000).toISOString()
+        }
+      ]
+    };
+
+    // Runtime state
+    let state = loadLocalData();
+    let currentFilter = 'all';
+    let supabase = null;
+
+    function loadLocalData() {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try { return JSON.parse(saved); } catch (e) {}
+      }
+      return JSON.parse(JSON.stringify(DEFAULT_DATA));
+    }
+
+    function saveLocalData() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      renderAll();
+    }
+
+    // =========================================================================
+    // SUPABASE CLOUD INITIALIZATION
+    // =========================================================================
+    function initSupabase() {
+      const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
+      if (settings.url && settings.key && window.supabase) {
+        try {
+          supabase = window.supabase.createClient(settings.url, settings.key);
+          document.getElementById("syncModeBadge").textContent = "Cloud Synced";
+          document.getElementById("syncModeBadge").className = "text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20";
+          document.getElementById("settingSupabaseUrl").value = settings.url;
+          document.getElementById("settingSupabaseKey").value = settings.key;
+          pullFromCloud();
+        } catch (e) {
+          console.error("Supabase init error:", e);
+        }
+      }
+    }
+
+    async function pullFromCloud() {
+      if (!supabase) return;
+      document.getElementById("syncStatusText").textContent = "Fetching from cloud...";
+      try {
+        const [campsRes, clipsRes, vidsRes] = await Promise.all([
+          supabase.from("campaigns").select("*"),
+          supabase.from("clippers").select("*"),
+          supabase.from("videos").select("*")
+        ]);
+
+        if (campsRes.data) state.campaigns = campsRes.data;
+        if (clipsRes.data) state.clippers = clipsRes.data;
+        if (vidsRes.data) {
+          state.videos = vidsRes.data.map(v => ({
+            id: v.id,
+            campaignId: v.campaign_id,
+            clipperId: v.clipper_id,
+            platform: v.platform,
+            handle: v.handle,
+            videoUrl: v.video_url,
+            title: v.title,
+            thumbnailUrl: v.thumbnail_url,
+            views: Number(v.views),
+            status: v.status,
+            isPreCampaign: v.is_pre_campaign,
+            postedAt: v.posted_at
+          }));
+        }
+        document.getElementById("syncStatusText").textContent = "Live Cloud • Synced Just Now";
+        saveLocalData();
+      } catch (err) {
+        document.getElementById("syncStatusText").textContent = "Sync failed • Working locally";
+      }
+    }
+
+    // =========================================================================
+    // LIVE MATH & CALCULATIONS ENGINE
+    // =========================================================================
+    function computeMetrics() {
+      const campaignMap = {};
+      state.campaigns.forEach(c => {
+        campaignMap[c.id] = { ...c, approvedViews: 0, pendingViews: 0, totalSpend: 0, approvedCount: 0 };
+      });
+
+      const clipperMap = {};
+      state.clippers.forEach(cl => {
+        clipperMap[cl.id] = { ...cl, approvedViews: 0, pendingViews: 0, totalEarned: 0, approvedCount: 0, totalCount: 0 };
+      });
+
+      let totalApprovedViews = 0;
+      let totalPayout = 0;
+      let pendingCount = 0;
+      let pendingViews = 0;
+
+      state.videos.forEach(v => {
+        const camp = campaignMap[v.campaignId] || { cpm: 1.50 };
+        const clip = clipperMap[v.clipperId];
+
+        if (clip) clip.totalCount++;
+
+        if (v.status === 'approved') {
+          totalApprovedViews += v.views;
+          const payout = (v.views / 1000) * Number(camp.cpm || 1.50);
+          totalPayout += payout;
+
+          if (camp) {
+            camp.approvedViews += v.views;
+            camp.totalSpend += payout;
+            camp.approvedCount++;
+          }
+          if (clip) {
+            clip.approvedViews += v.views;
+            clip.totalEarned += payout;
+            clip.approvedCount++;
+          }
+        } else if (v.status === 'pending') {
+          pendingCount++;
+          pendingViews += v.views;
+          if (camp) camp.pendingViews += v.views;
+          if (clip) clip.pendingViews += v.views;
+        }
+      });
+
+      return {
+        totalApprovedViews,
+        totalPayout,
+        pendingCount,
+        pendingViews,
+        campaignMap,
+        clipperMap
+      };
+    }
+
+    // =========================================================================
+    // RENDERING LOGIC
+    // =========================================================================
+    function renderAll() {
+      const metrics = computeMetrics();
+
+      // Top KPI Cards
+      document.getElementById("dashTotalViews").textContent = metrics.totalApprovedViews.toLocaleString();
+      document.getElementById("dashTotalPayout").textContent = "$" + metrics.totalPayout.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      document.getElementById("dashPendingVideos").textContent = metrics.pendingCount;
+      document.getElementById("dashPendingViews").textContent = `${metrics.pendingViews.toLocaleString()} pending views`;
+      document.getElementById("dashClipperCount").textContent = state.clippers.length;
+      document.getElementById("dashCampaignCount").textContent = `Across ${state.campaigns.length} campaigns`;
+
+      // Nav Pending Badge indicator
+      const navBadge = document.getElementById("navPendingBadge");
+      if (metrics.pendingCount > 0) {
+        navBadge.classList.remove("hidden");
+      } else {
+        navBadge.classList.add("hidden");
+      }
+
+      // Render Dashboard Campaign list
+      renderDashboardCampaigns(metrics.campaignMap);
+
+      // Render Dashboard Clipper Ledger
+      renderDashboardClipperLedger(metrics.clipperMap);
+
+      // Render Videos Tab
+      renderVideosTab();
+
+      // Render Campaigns Tab
+      renderCampaignsTab(metrics.campaignMap);
+
+      // Render Clippers Tab
+      renderClippersTab(metrics.clipperMap);
+
+      // Update Lucide icons
+      if (window.lucide) { lucide.createIcons(); }
+    }
+
+    function renderDashboardCampaigns(campaignMap) {
+      const container = document.getElementById("dashCampaignsList");
+      if (state.campaigns.length === 0) {
+        container.innerHTML = `<p class="text-xs text-slate-400">No active campaigns. Tap New Campaign to create one.</p>`;
+        return;
+      }
+
+      container.innerHTML = state.campaigns.map(c => {
+        const data = campaignMap[c.id] || { totalSpend: 0, approvedViews: 0 };
+        const budgetCap = c.budgetCap ? Number(c.budgetCap) : null;
+        const percent = budgetCap ? Math.min(100, Math.round((data.totalSpend / budgetCap) * 100)) : null;
+
+        return `
+          <div class="p-3 rounded-xl bg-surface/80 border border-white/5 space-y-2">
+            <div class="flex items-center justify-between">
+              <div>
+                <h4 class="text-xs font-bold text-white">${c.name}</h4>
+                <p class="text-[11px] text-slate-400">CPM: <span class="text-indigo-400 font-semibold">$${Number(c.cpm).toFixed(2)}</span> • Platform: <span class="capitalize text-slate-300">${c.platform}</span></p>
+              </div>
+              <div class="text-right">
+                <span class="text-xs font-bold text-emerald-400">$${data.totalSpend.toFixed(2)}</span>
+                ${budgetCap ? `<span class="text-[11px] text-slate-400"> / $${budgetCap}</span>` : ''}
+                <div class="text-[10px] text-slate-400">${data.approvedViews.toLocaleString()} views</div>
+              </div>
+            </div>
+            ${budgetCap ? `
+              <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                <div class="bg-indigo-500 h-1.5 rounded-full" style="width: ${percent}%"></div>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderDashboardClipperLedger(clipperMap) {
+      const container = document.getElementById("dashClipperLedger");
+      if (state.clippers.length === 0) {
+        container.innerHTML = `<p class="text-xs text-slate-400 py-2">No clippers registered yet.</p>`;
+        return;
+      }
+
+      container.innerHTML = state.clippers.map(cl => {
+        const data = clipperMap[cl.id] || { approvedViews: 0, totalEarned: 0, approvedCount: 0, totalCount: 0 };
+        const handlesList = Array.isArray(cl.handles) ? cl.handles.join(', ') : cl.handles;
+
+        return `
+          <div class="py-3 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-full bg-indigo-600/20 text-indigo-400 flex items-center justify-center font-bold text-xs border border-indigo-500/20">
+                ${cl.name.charAt(0)}
+              </div>
+              <div>
+                <h4 class="text-xs font-bold text-white">${cl.name}</h4>
+                <p class="text-[11px] text-slate-400">${handlesList || 'No handles'}</p>
+              </div>
+            </div>
+            <div class="text-right">
+              <div class="text-sm font-extrabold text-emerald-400">+$${data.totalEarned.toFixed(2)}</div>
+              <div class="text-[10px] text-slate-400">${data.approvedViews.toLocaleString()} views (${data.approvedCount}/${data.totalCount} clips)</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderVideosTab() {
+      const container = document.getElementById("videoCardsList");
+      
+      // Update badge counters
+      const allCount = state.videos.length;
+      const pendingCount = state.videos.filter(v => v.status === 'pending').length;
+      const approvedCount = state.videos.filter(v => v.status === 'approved').length;
+      const preCount = state.videos.filter(v => v.isPreCampaign).length;
+
+      document.getElementById("count-all").textContent = allCount;
+      document.getElementById("count-pending").textContent = pendingCount;
+      document.getElementById("count-approved").textContent = approvedCount;
+      document.getElementById("count-pre").textContent = preCount;
+
+      let filtered = state.videos;
+      if (currentFilter === 'pending') filtered = state.videos.filter(v => v.status === 'pending');
+      else if (currentFilter === 'approved') filtered = state.videos.filter(v => v.status === 'approved');
+      else if (currentFilter === 'pre_campaign') filtered = state.videos.filter(v => v.isPreCampaign);
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="glass p-8 rounded-2xl text-center space-y-2">
+            <i data-lucide="video-off" class="w-8 h-8 text-slate-500 mx-auto"></i>
+            <p class="text-sm font-medium text-slate-300">No videos found</p>
+            <p class="text-xs text-slate-500">Wait for the 30-min background sync to pull clips, or tap Add Video.</p>
+          </div>
+        `;
+        return;
+      }
+
+      const campMap = {};
+      state.campaigns.forEach(c => campMap[c.id] = c);
+
+      container.innerHTML = filtered.map(v => {
+        const camp = campMap[v.campaignId] || { name: 'Campaign', cpm: 1.50 };
+        const videoPayout = ((v.views / 1000) * Number(camp.cpm || 1.50)).toFixed(2);
+        
+        let statusBadge = '';
+        if (v.status === 'approved') {
+          statusBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1"><i data-lucide="check" class="w-3 h-3"></i> Approved</span>`;
+        } else if (v.status === 'pending') {
+          statusBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1"><i data-lucide="clock" class="w-3 h-3"></i> Pending</span>`;
+        } else {
+          statusBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-500/20 text-slate-400 border border-slate-500/30">Unsubmitted</span>`;
+        }
+
+        const platformIcon = v.platform === 'youtube' ? 'play-square' : (v.platform === 'instagram' ? 'instagram' : 'music-2');
+
+        return `
+          <div class="glass p-4 rounded-2xl border border-white/10 space-y-3">
+            <div class="flex items-start justify-between gap-2">
+              <div class="space-y-1">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="text-xs font-bold text-indigo-400 flex items-center gap-1">
+                    <i data-lucide="${platformIcon}" class="w-3.5 h-3.5"></i> ${v.handle}
+                  </span>
+                  <span class="text-slate-600">•</span>
+                  <span class="text-xs text-slate-300 font-medium">${camp.name}</span>
+                  ${v.isPreCampaign ? `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">⚠️ Pre-Campaign Clip</span>` : ''}
+                </div>
+                <h4 class="text-xs font-semibold text-white line-clamp-2">${v.title || 'Untitled Post'}</h4>
+              </div>
+              <div class="text-right shrink-0">
+                ${statusBadge}
+                <div class="text-xs font-bold text-white mt-1.5">${v.views.toLocaleString()} views</div>
+                <div class="text-[10px] ${v.status === 'approved' ? 'text-emerald-400 font-bold' : 'text-slate-400'}">Est: $${videoPayout}</div>
+              </div>
+            </div>
+
+            <div class="pt-2 border-t border-white/5 flex items-center justify-between gap-2">
+              <a href="${v.videoUrl}" target="_blank" rel="noopener noreferrer" class="text-xs text-slate-300 hover:text-white flex items-center gap-1 px-2.5 py-1.5 bg-surface rounded-lg border border-white/5 transition">
+                <i data-lucide="external-link" class="w-3.5 h-3.5 text-indigo-400"></i> Watch Clip
+              </a>
+
+              <!-- Approval Action Buttons -->
+              <div class="flex items-center gap-1.5">
+                ${v.status === 'approved' ? `
+                  <button onclick="toggleVideoStatus('${v.id}', 'unsubmitted')" class="px-3 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 rounded-lg text-xs font-semibold flex items-center gap-1 transition active:scale-95">
+                    <i data-lucide="undo-2" class="w-3.5 h-3.5"></i> Unsubmit
+                  </button>
+                ` : `
+                  <button onclick="toggleVideoStatus('${v.id}', 'approved')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 transition active:scale-95 shadow-md shadow-emerald-600/20">
+                    <i data-lucide="check" class="w-3.5 h-3.5"></i> Approve
+                  </button>
+                  ${v.status !== 'unsubmitted' ? `
+                    <button onclick="toggleVideoStatus('${v.id}', 'unsubmitted')" class="p-1.5 text-slate-400 hover:text-rose-400 transition" title="Reject / Ignore">
+                      <i data-lucide="x-circle" class="w-4 h-4"></i>
+                    </button>
+                  ` : ''}
+                `}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderCampaignsTab(campaignMap) {
+      const container = document.getElementById("campaignsContainer");
+      if (state.campaigns.length === 0) {
+        container.innerHTML = `<p class="text-xs text-slate-400 col-span-2">No campaigns yet.</p>`;
+        return;
+      }
+
+      container.innerHTML = state.campaigns.map(c => {
+        const metrics = campaignMap[c.id] || { totalSpend: 0, approvedViews: 0, approvedCount: 0 };
+        return `
+          <div class="glass p-5 rounded-2xl space-y-3 border border-white/10">
+            <div class="flex items-center justify-between">
+              <h3 class="text-sm font-bold text-white">${c.name}</h3>
+              <span class="text-xs font-black text-indigo-400 bg-indigo-500/15 px-2.5 py-1 rounded-lg border border-indigo-500/30">$${Number(c.cpm).toFixed(2)} CPM</span>
+            </div>
+            <div class="grid grid-cols-3 gap-2 text-center pt-1">
+              <div class="p-2 rounded-xl bg-surface/80 border border-white/5">
+                <div class="text-[10px] text-slate-400">Total Spend</div>
+                <div class="text-xs font-bold text-emerald-400">$${metrics.totalSpend.toFixed(2)}</div>
+              </div>
+              <div class="p-2 rounded-xl bg-surface/80 border border-white/5">
+                <div class="text-[10px] text-slate-400">Valid Views</div>
+                <div class="text-xs font-bold text-white">${metrics.approvedViews.toLocaleString()}</div>
+              </div>
+              <div class="p-2 rounded-xl bg-surface/80 border border-white/5">
+                <div class="text-[10px] text-slate-400">Clips Count</div>
+                <div class="text-xs font-bold text-white">${metrics.approvedCount}</div>
+              </div>
+            </div>
+            <div class="text-[11px] text-slate-400 pt-1 space-y-1">
+              <div>Started: <span class="text-slate-300 font-medium">${c.startDate}</span></div>
+              ${c.tagFilter ? `<div>Required Tag: <span class="text-indigo-300 font-mono">${c.tagFilter}</span></div>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderClippersTab(clipperMap) {
+      const container = document.getElementById("clippersContainer");
+      if (state.clippers.length === 0) {
+        container.innerHTML = `<p class="text-xs text-slate-400 col-span-2">No clippers yet.</p>`;
+        return;
+      }
+
+      container.innerHTML = state.clippers.map(cl => {
+        const metrics = clipperMap[cl.id] || { totalEarned: 0, approvedViews: 0, approvedCount: 0 };
+        const handlesList = Array.isArray(cl.handles) ? cl.handles : [cl.handles];
+
+        return `
+          <div class="glass p-5 rounded-2xl space-y-3 border border-white/10">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-sm font-bold text-white">${cl.name}</h3>
+                <p class="text-xs text-slate-400">${cl.contact || 'No contact info'}</p>
+              </div>
+              <div class="text-right">
+                <span class="text-sm font-black text-emerald-400">+$${metrics.totalEarned.toFixed(2)}</span>
+                <p class="text-[10px] text-slate-400">Total Payout</p>
+              </div>
+            </div>
+
+            <!-- Handles tags -->
+            <div class="flex flex-wrap gap-1.5 pt-1">
+              ${handlesList.map(h => `<span class="px-2 py-0.5 rounded-lg bg-surface border border-white/10 text-xs text-indigo-300 font-mono">${h}</span>`).join('')}
+            </div>
+
+            <div class="pt-2 border-t border-white/5 flex items-center justify-between text-xs text-slate-400">
+              <span>${metrics.approvedViews.toLocaleString()} approved views</span>
+              <span>${metrics.approvedCount} approved clips</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // =========================================================================
+    // ACTIONS & HANDLERS
+    // =========================================================================
+    function toggleVideoStatus(videoId, newStatus) {
+      const video = state.videos.find(v => v.id === videoId);
+      if (!video) return;
+
+      video.status = newStatus;
+      saveLocalData();
+
+      // Cloud sync if Supabase is active
+      if (supabase) {
+        supabase.from("videos").update({ status: newStatus }).eq("id", videoId).then(() => {
+          document.getElementById("syncStatusText").textContent = "Live Cloud • Saved!";
+        });
+      }
+    }
+
+    function bulkApproveAll() {
+      state.videos.forEach(v => {
+        if (v.status === 'pending') {
+          v.status = 'approved';
+        }
+      });
+      saveLocalData();
+      if (supabase) {
+        supabase.from("videos").update({ status: 'approved' }).eq("status", "pending").then(() => {
+          pullFromCloud();
+        });
+      }
+    }
+
+    function setVideoFilter(filter) {
+      currentFilter = filter;
+      document.querySelectorAll('.filter-badge').forEach(b => {
+        b.className = "filter-badge px-3 py-1 rounded-lg bg-surface border border-white/10 text-slate-300 font-medium";
+      });
+      const activeBtn = document.getElementById(`filter-btn-${filter}`);
+      if (activeBtn) {
+        activeBtn.className = "filter-badge active px-3 py-1 rounded-lg bg-indigo-600 text-white font-medium";
+      }
+      renderVideosTab();
+      if (window.lucide) { lucide.createIcons(); }
+    }
+
+    function switchTab(tabId) {
+      // Hide all tabs
+      ['dashboard', 'videos', 'campaigns', 'clippers', 'settings'].forEach(id => {
+        const tabEl = document.getElementById(`tab-${id}`);
+        const navEl = document.getElementById(`nav-${id}`);
+        if (tabEl) tabEl.classList.add('hidden');
+        if (navEl) navEl.className = "nav-btn flex flex-col items-center gap-1 py-1 text-slate-400";
+      });
+
+      // Show selected tab
+      const activeTabEl = document.getElementById(`tab-${tabId}`);
+      const activeNavEl = document.getElementById(`nav-${tabId}`);
+      if (activeTabEl) activeTabEl.classList.remove('hidden');
+      if (activeNavEl) activeNavEl.className = "nav-btn active flex flex-col items-center gap-1 py-1 text-indigo-400 font-bold";
+
+      if (window.lucide) { lucide.createIcons(); }
+    }
+
+    function refreshData() {
+      const icon = document.getElementById("refreshIcon");
+      icon.classList.add("animate-spin");
+      if (supabase) {
+        pullFromCloud().finally(() => {
+          setTimeout(() => icon.classList.remove("animate-spin"), 600);
+        });
+      } else {
+        setTimeout(() => {
+          icon.classList.remove("animate-spin");
+          renderAll();
+        }, 500);
+      }
+    }
+
+    // Modal open / close helpers
+    function openModal(id) {
+      const modal = document.getElementById(id);
+      if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        
+        // Populate select dropdowns
+        if (id === 'clipperModal') {
+          const select = document.getElementById("clipCampaign");
+          select.innerHTML = state.campaigns.map(c => `<option value="${c.id}">${c.name} ($${c.cpm} CPM)</option>`).join('');
+        }
+        if (id === 'addVideoModal') {
+          const select = document.getElementById("manualVidClipper");
+          select.innerHTML = state.clippers.map(cl => `<option value="${cl.id}">${cl.name}</option>`).join('');
+        }
+      }
+      if (window.lucide) { lucide.createIcons(); }
+    }
+
+    function closeModal(id) {
+      const modal = document.getElementById(id);
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+    }
+
+    function handleSaveCampaign(e) {
+      e.preventDefault();
+      const newCamp = {
+        id: "camp-" + Date.now(),
+        name: document.getElementById("campName").value.trim(),
+        cpm: parseFloat(document.getElementById("campCpm").value),
+        platform: document.getElementById("campPlatform").value,
+        budgetCap: document.getElementById("campBudget").value ? parseFloat(document.getElementById("campBudget").value) : null,
+        tagFilter: document.getElementById("campTagFilter").value.trim(),
+        startDate: document.getElementById("campStartDate").value,
+        status: "active"
+      };
+
+      state.campaigns.push(newCamp);
+      saveLocalData();
+      closeModal('campaignModal');
+      e.target.reset();
+
+      if (supabase) {
+        supabase.from("campaigns").insert([{
+          name: newCamp.name,
+          cpm: newCamp.cpm,
+          platform: newCamp.platform,
+          budget_cap: newCamp.budgetCap,
+          tag_filter: newCamp.tagFilter,
+          start_date: newCamp.startDate
+        }]).then(() => pullFromCloud());
+      }
+    }
+
+    function handleSaveClipper(e) {
+      e.preventDefault();
+      const handlesInput = document.getElementById("clipHandles").value;
+      const handles = handlesInput.split(',').map(h => h.trim()).filter(Boolean);
+
+      const newClipper = {
+        id: "clip-" + Date.now(),
+        name: document.getElementById("clipName").value.trim(),
+        contact: document.getElementById("clipContact").value.trim(),
+        assignedCampaignIds: [document.getElementById("clipCampaign").value],
+        handles: handles
+      };
+
+      state.clippers.push(newClipper);
+      saveLocalData();
+      closeModal('clipperModal');
+      e.target.reset();
+
+      if (supabase) {
+        supabase.from("clippers").insert([{
+          name: newClipper.name,
+          contact: newClipper.contact,
+          assigned_campaign_ids: newClipper.assignedCampaignIds,
+          handles: newClipper.handles.map(h => ({ platform: "tiktok", handle: h }))
+        }]).then(() => pullFromCloud());
+      }
+    }
+
+    function handleSaveManualVideo(e) {
+      e.preventDefault();
+      const clipperId = document.getElementById("manualVidClipper").value;
+      const clipper = state.clippers.find(c => c.id === clipperId);
+      const campId = (clipper && clipper.assignedCampaignIds[0]) || state.campaigns[0]?.id;
+
+      const newVideo = {
+        id: "vid-" + Date.now(),
+        campaignId: campId,
+        clipperId: clipperId,
+        platform: "tiktok",
+        handle: clipper?.handles[0] || "@clipper",
+        videoUrl: document.getElementById("manualVidUrl").value.trim(),
+        title: "Manually Submitted Clip",
+        views: parseInt(document.getElementById("manualVidViews").value, 10) || 0,
+        status: document.getElementById("manualVidStatus").value,
+        isPreCampaign: false,
+        postedAt: new Date().toISOString()
+      };
+
+      state.videos.unshift(newVideo);
+      saveLocalData();
+      closeModal('addVideoModal');
+      e.target.reset();
+
+      if (supabase) {
+        supabase.from("videos").insert([{
+          campaign_id: newVideo.campaignId,
+          clipper_id: newVideo.clipperId,
+          platform: newVideo.platform,
+          handle: newVideo.handle,
+          video_url: newVideo.videoUrl,
+          title: newVideo.title,
+          views: newVideo.views,
+          status: newVideo.status
+        }]).then(() => pullFromCloud());
+      }
+    }
+
+    function saveSupabaseSettings() {
+      const url = document.getElementById("settingSupabaseUrl").value.trim();
+      const key = document.getElementById("settingSupabaseKey").value.trim();
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ url, key }));
+      initSupabase();
+      alert("Settings saved! Connecting to cloud...");
+    }
+
+    function exportDataJson() {
+      const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `clippulse_backup_${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+    }
+
+    function importDataJson(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        try {
+          const imported = JSON.parse(evt.target.result);
+          if (imported.campaigns && imported.clippers && imported.videos) {
+            state = imported;
+            saveLocalData();
+            alert("Backup imported successfully!");
+          } else {
+            alert("Invalid backup file structure.");
+          }
+        } catch (err) {
+          alert("Error parsing JSON file.");
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function resetToDemoData() {
+      if (confirm("Reset all data back to original sample data?")) {
+        state = JSON.parse(JSON.stringify(DEFAULT_DATA));
+        saveLocalData();
+      }
+    }
+
+    // Set today's date in campaign modal
+    document.getElementById("campStartDate").value = new Date().toISOString().split('T')[0];
+
+    // Boot
+    initSupabase();
+    renderAll();
+  </script>
+</body>
+</html>
